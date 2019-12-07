@@ -1,6 +1,10 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
+const bcrypt = require('bcryptjs');
+const jsonwebtoken = require('jsonwebtoken');
+
+
 const app = express();
 
 
@@ -12,7 +16,7 @@ app.use(bodyParser.urlencoded({
 }));
 
 
-const Student = mongoose.model('Student', {
+const Users = mongoose.model('Users', {
     email: String,
     password: String,
     name: String,
@@ -34,65 +38,151 @@ const Student = mongoose.model('Student', {
     res.send(allStudents);
   });
 
-app.post('/signup', async (req, res) => {
-    const body = req.body;
-    console.log('req.body', body);
-    try{
-        const student = new Student(body);
+// app.post('/signup', async (req, res) => {
+//     const body = req.body;
+//     console.log('req.body', body);
+//     try{
+//         const student = new Student(body);
         
-        const result = await student.save();
+//         const result = await student.save();
         
-    res.send({
-      message: 'Success'
-    });
-    }
-    catch(ex){
-        console.log('ex',ex);
-        res.send({message: 'Error'}).status(401);
-      }
+//     res.send({
+//       message: 'Success'
+//     });
+//     }
+//     catch(ex){
+//         console.log('ex',ex);
+//         res.send({message: 'Error'}).status(401);
+//       }
     
-      });
+//       });
 
-     
-      app.post('/login',  async (req, res) => {
+app.post('/signup', async (req, res) => {
+
+  try{
+    const body = req.body;
+
+    // there must be a password in body
+
+    // we follow these 2 steps
+
+    const password = body.password;
+
+    var salt = bcrypt.genSaltSync(10);
+    var hash = bcrypt.hashSync(password, salt);
+    body.password = hash;
+
+    console.log('hash - > ', hash);
+     const user = new Users(body);
+
+
+     const result = await user.save();
+
+    res.send({
+      message: 'Student signup successful'
+    });
+
+  }
+
+  catch(ex){
+    console.log('ex',ex)
+
+    res.send({
+      message: 'Error in signup',
+      detail: ex
+    }).status(500);
+  }
+
+  });
+    //   app.post('/login',  async (req, res) => {
+    //     const body = req.body;
+    //     console.log('req.body', body);
+    
+    //     const email = body.email;
+    
+    //     // lets check if email exists
+    
+    //     const result = await Student.findOne({"email":  email});
+    //     console.log('result', result);
+    //     if(!result) // this means result is null
+    //     {
+    //       res.status(401).send({
+    //         Error: 'This user doesnot exists. Please signup first'
+    //        });
+    //     }
+         
+    //     if(body.password === result.password){
+
+    //         // great, allow this user access
+    
+    //         console.log('match');
+    
+    //         res.send({message: 'Successfully Logged in'});
+    //       }
+    
+    //         else{
+    
+    //           console.log('password doesnot match');
+    
+    //           res.status(401).send({message: 'Wrong email or Password'});
+    //         }
+    
+    //     console.log('result', result);
+    //     // 2. if exists, check if password matches
+    
+    // res.send({result: result});
+    
+    //   });
+
+    app.post('/login', async (req, res) => {
+      try {
         const body = req.body;
-        console.log('req.body', body);
     
         const email = body.email;
     
         // lets check if email exists
     
-        const result = await Student.findOne({"email":  email});
-        console.log('result', result);
-        if(!result) // this means result is null
-        {
+        const result = await Users.findOne({ email: email });
+        if (!result) {
+          // this means result is null
           res.status(401).send({
             Error: 'This user doesnot exists. Please signup first'
-           });
-        }
-         
-        if(body.password === result.password){
-
+          });
+        } else {
+          // email did exist
+          // so lets match password
+          if ( bcrypt.compareSync(body.password, result.password)) {
             // great, allow this user access
     
             console.log('match');
+            delete result['password'];
+            const token = jsonwebtoken.sign({
+               data: result,
+               role: 'User'
+            }, 'supersecretToken', { expiresIn: '7d' });
+            result.password = undefined;
+            console.log('token -> ', token)
     
-            res.send({message: 'Successfully Logged in'});
+            res.send({ message: 'Successfully Logged in', token: token });
           }
+          // if ( bcrypt.compareSync(body.password, result.password))
+          // {//if (body.password === result.password) {
+          //   // great, allow this user access
     
-            else{
+          //   console.log('match');
     
-              console.log('password doesnot match');
+          //   res.send({ message: 'Successfully Logged in' });
+          // }
+           else {
+            console.log('password doesnot match');
     
-              res.status(401).send({message: 'Wrong email or Password'});
-            }
-    
-        console.log('result', result);
-        // 2. if exists, check if password matches
-    
-    res.send({result: result});
-    
-      });
+            res.status(401).send({ message: 'Wrong email or Password' });
+          }
+        }
+      } catch (ex) {
+        console.log('ex', ex);
+      }
+    });
     
       
 // app.get('*', (req, res) => { 
